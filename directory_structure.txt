@@ -1,0 +1,142 @@
+backend/
+├── .env                                # Environment variables
+├── app.js                              # Express app setup
+├── server.js                           # Main server entry point
+├── config/                             # Configuration files
+│   ├── database.js                     # Database configuration
+│   ├── dotenv.js                       # Env config loader
+│   ├── gatewayConfig.js                # Payment gateway config
+│   ├── paynowConfig.js                 # Paynow service config
+│   ├── paypalConfig.js                 # PayPal config
+│   ├── rpcConfig.js                    # Remote procedure call config
+│   ├── security.js                     # Security configurations
+│   ├── stripeConfig.js                 # Stripe API configuration
+│   └── walletConfig.js                 # Wallet-related configurations
+├── controllers/                        # Business logic layer
+│   ├── adminController.js
+│   ├── authController.js
+│   ├── authMiddleware.js               # Auth functions (possibly misplaced here)
+│   ├── cryptoController.js
+│   ├── currencyController.js
+│   ├── gatewayController.js
+│   ├── kycController.js
+│   ├── paymentController.js
+│   ├── permissionController.js
+│   ├── reportingController.js
+│   ├── roleController.js
+│   ├── transactionController.js
+│   ├── universalController.js
+│   ├── userController.js
+│   └── walletController.js
+├── middlewares/                        # Middleware functions
+│   ├── authMiddleware.js               # Auth-related middleware
+│   ├── errorHandler.js                 # Centralized error handling
+│   ├── GatewayConfig.js                # Gateway-specific middleware
+│   ├── loggerMiddleware.js             # Request logging
+│   ├── Payment.js                      # Payment handling middleware
+│   ├── permissionMiddleware.js         # Permission checks
+│   └── validationMiddleware.js         # Request validation middleware
+├── models/                             # Database models
+│   ├── Cryptocurrency.js
+│   ├── Currency.js
+│   ├── EncryptedData.js
+│   ├── index.js                        # Model index for exports
+│   ├── KycSubmission.js
+│   ├── Payment.js
+│   ├── Permission.js
+│   ├── Role.js
+│   ├── RolePermission.js
+│   ├── Transaction.js
+│   ├── User.js
+│   ├── WalletAddress.js
+│   └── WalletType.js
+├── routes/                             # Route handlers
+│   ├── adminRoutes.js
+│   ├── authRoutes.js
+│   ├── cryptocurrencyRoutes.js
+│   ├── cryptoRoutes.js
+│   ├── currencyRoutes.js
+│   ├── dashboardRoutes.js
+│   ├── gatewayRoutes.js
+│   ├── index.js                        # Main route export
+│   ├── kycRoutes.js
+│   ├── paymentRoutes.js
+│   ├── permissionRoutes.js
+│   ├── reportingRoutes.js
+│   ├── roleRoutes.js
+│   ├── transactionRoutes.js
+│   ├── universalRoutes.js
+│   ├── userRoutes.js
+│   ├── walletRoutes.js
+│   └── walletTypeRoutes.js
+├── services/                           # Service layer (business logic)
+│   ├── apiManager.js                   # API requests manager
+│   ├── cryptoService.js                # Cryptographic services
+│   ├── excelService.js                 # Excel file management
+│   ├── gatewayService.js               # Payment gateway integration
+│   ├── jwtService.js                   # JWT token management
+│   ├── payoneerService.js              # Payoneer payment handling
+│   ├── paypalService.js                # PayPal payment handling
+│   ├── reportingService.js             # Reporting services
+│   ├── responseConverter.js            # Response formatting utilities
+│   ├── rpcService.js                   # Remote Procedure Call services
+│   └── stripeService.js                # Stripe payment integration
+├── utils/                              # Utility functions
+│   ├── constants.js                    # Project-wide constants
+│   ├── encryption.js                   # Encryption utilities
+│   ├── logger.js                       # Logging utility
+│   ├── moduleInitializer.js            # Dynamic module loading
+│   ├── response.js                     # Response handler
+│   ├── rsaEncryption.js                # RSA encryption utilities
+│   └── validations.js                  # Validation utilities
+├── seeders/                            # Database seeding scripts
+│   └── dummyData.js
+├── rsa_private.pem                     # Private key for encryption
+├── rsa_public.pem                      # Public key for encryption
+├── generateKeyPair.js                  # Script to generate RSA keys
+├── generateStructure.js                # Structure generation utility
+├── socket.js                           # WebSocket setup
+├── swagger.js                          # API documentation setup
+├── sync.js                             # Database sync utility
+└── testModels.js                       # Model testing utility
+//frontend
+frontend/
+├── .gitignore                      # Git ignore file
+├── index.html                      # Main HTML file
+├── eslint.config.js                # ESLint configuration
+├── generateStructure.cjs           # Structure generation utility
+├── node_modules/                   # Project dependencies
+├── package.json                    # Project metadata and dependencies
+├── package-lock.json               # Dependency lockfile
+├── public/                         # Static files
+│   └── favicon.ico                 # Favicon example
+├── src/                            # Source files
+│   ├── App.js                      # Main app component
+│   ├── index.js                    # Entry point of the application
+│   ├── components/                 # Reusable components
+│   │   ├── Header.jsx              # Header component
+│   │   ├── Footer.jsx              # Footer component
+│   │   ├── Navbar.jsx              # Navigation bar component
+│   │   └── Sidebar.jsx             # Sidebar component
+│   ├── pages/                      # Page-level components
+│   │   ├── HomePage.jsx            # Home page
+│   │   ├── LoginPage.jsx           # Login page
+│   │   └── DashboardPage.jsx       # Dashboard page
+│   ├── services/                   # API calls and service logic
+│   │   ├── api.js                  # API handler
+│   │   └── authService.js          # Authentication service
+│   ├── styles/                     # Global styles and CSS files
+│   │   ├── global.css              # Global CSS styles
+│   │   └── reset.css               # Reset CSS
+│   ├── utils/                      # Utility functions
+│   │   ├── constants.js            # Project-wide constants
+│   │   └── helpers.js              # Helper functions
+│   └── hooks/                      # Custom React hooks
+│       └── useAuth.js              # Authentication hook
+├── tests/                          # Test files
+│   ├── unit/                       # Unit tests
+│   │   └── Header.test.js          # Test for Header component
+│   ├── integration/                # Integration tests
+│   │   └── apiIntegration.test.js  # API integration tests
+│   └── e2e/                        # End-to-end tests
+│       └── navigationFlow.test.js  # Test navigation flows
