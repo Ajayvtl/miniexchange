@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "ETH",
+    "price_usd": 2685.9
+  },
+  {
+    "symbol": "LTC",
+    "price_usd": 127.85
+  },
+  {
+    "symbol": "UCN",
+    "price_usd": "N/A"
+  },
+  {
+    "symbol": "BNB",
+    "price_usd": 638.77
+  },
+  {
+    "symbol": "USDT",
+    "price_usd": 1
+  }
+]

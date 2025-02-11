@@ -1,9 +1,83 @@
+// src/backend/controllers/walletController.js
 const sequelize = require('../config/database');
-const { rsaEncrypt } = require('../utils/rsaEncryption');
+const { rsaEncrypt, rsaDecrypt } = require('../utils/rsaEncryption');
 const { insertAuditLog } = require('../utils/logger');
-const rsaPublicKey = process.env.RSA_PUBLIC_KEY.replace(/\\n/g, '\n');
+const crypto = require('crypto');
+const rsaPublicKey = process.env.RSA_PUBLIC_KEY.replace(/\n/g, '\n');
+const rsaPrivateKey = process.env.RSA_PRIVATE_KEY
+    ? process.env.RSA_PRIVATE_KEY.replace(/\\n/g, '\n')
+    : (() => {
+        console.error('RSA_PRIVATE_KEY is not defined in environment variables');
+        process.exit(1);
+    })();
 
-// Add Wallet
+// Utility function to derive the public key from a mnemonic
+function derivePublicKeyFromMnemonic(mnemonic) {
+    const hash = crypto.createHash('sha256').update(mnemonic).digest('hex');
+    return `04${hash.slice(0, 64)}`;  // Simulate deriving a public key (replace with actual derivation logic)
+}
+// Utility function to derive the public key from a private key or mnemonic
+function derivePublicKeyFromPrivateKey(privateKey) {
+    const hash = crypto.createHash('sha256').update(privateKey).digest('hex');
+    return `04${hash.slice(0, 64)}`;  // Example derivation, replace with proper logic
+}
+// Restore Wallet using mnemonic or encrypted private key
+exports.restoreWallet = async (req, res) => {
+    try {
+        const { mnemonic, encryptedPrivateKey } = req.body;
+
+        if (!mnemonic && !encryptedPrivateKey) {
+            return res.status(400).json({ message: 'Either mnemonic or encrypted private key is required' });
+        }
+
+        let publicKey;
+        if (mnemonic) {
+            // Derive the public key from the mnemonic (simulating private key)
+            const privateKey = crypto.createHash('sha256').update(mnemonic).digest('hex');
+            publicKey = derivePublicKeyFromPrivateKey(privateKey);
+        } else {
+            // Decrypt the private key using RSA
+            const decryptedPrivateKey = rsaDecrypt(encryptedPrivateKey, rsaPrivateKey);
+            publicKey = derivePublicKeyFromPrivateKey(decryptedPrivateKey);
+        }
+
+        // Find wallets and keys associated with this public key using encrypted_keys
+        const wallets = await sequelize.query(
+            `
+            SELECT 
+                w.id AS wallet_id, 
+                w.wallet_address, 
+                w.is_evm_compatible, 
+                w.backup, 
+                ek.encrypted_private_key, 
+                w.created_at, 
+                w.updated_at
+            FROM wallet_addresses w
+            INNER JOIN encrypted_keys ek ON w.id = ek.wallet_id
+            WHERE ek.encrypted_private_key IS NOT NULL AND ek.user_id = (SELECT user_id FROM encrypted_keys WHERE encrypted_private_key = :publicKey LIMIT 1)
+            `,
+            {
+                type: sequelize.QueryTypes.SELECT,
+                replacements: { publicKey },
+            }
+        );
+
+        if (!wallets.length) {
+            return res.status(404).json({ message: 'No wallets found for this user' });
+        }
+
+        // Log the wallet restoration
+        await insertAuditLog(null, null, 'Wallet Restored');
+
+        res.status(200).json({ wallets });
+    } catch (error) {
+        console.error('Error restoring wallet:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+
+// Other existing functions
 exports.addWallet = async (req, res) => {
     if (!rsaPublicKey) {
         console.error('RSA Public Key is not defined in environment variables');
@@ -20,9 +94,9 @@ exports.addWallet = async (req, res) => {
         // Insert wallet into wallet_addresses table
         await sequelize.query(
             `
-      INSERT INTO wallet_addresses (user_id, wallet_address, wallet_type_id, is_evm_compatible, backup, created_at, updated_at)
-      VALUES (:userId, :walletAddress, :walletTypeId, :isEvmCompatible, :backup, NOW(), NOW())
-      `,
+            INSERT INTO wallet_addresses (user_id, wallet_address, wallet_type_id, is_evm_compatible, backup, created_at, updated_at)
+            VALUES (:userId, :walletAddress, :walletTypeId, :isEvmCompatible, :backup, NOW(), NOW())
+            `,
             {
                 replacements: { userId, walletAddress, walletTypeId, isEvmCompatible, backup },
             }
@@ -47,9 +121,9 @@ exports.addWallet = async (req, res) => {
         // Insert encrypted private key into encrypted_keys table
         await sequelize.query(
             `
-      INSERT INTO encrypted_keys (user_id, wallet_id, encrypted_private_key, created_at, updated_at)
-      VALUES (:userId, :walletId, :encryptedPrivateKey, NOW(), NOW())
-      `,
+            INSERT INTO encrypted_keys (user_id, wallet_id, encrypted_private_key, created_at, updated_at)
+            VALUES (:userId, :walletId, :encryptedPrivateKey, NOW(), NOW())
+            `,
             {
                 replacements: { userId, walletId: wallet.id, encryptedPrivateKey },
             }
@@ -65,7 +139,6 @@ exports.addWallet = async (req, res) => {
     }
 };
 
-// Get Wallets by User
 exports.getWalletsByUser = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -74,18 +147,18 @@ exports.getWalletsByUser = async (req, res) => {
         // Fetch wallets and associated encrypted private keys
         const wallets = await sequelize.query(
             `
-      SELECT 
-        w.id AS wallet_id,
-        w.wallet_address,
-        w.is_evm_compatible,
-        w.backup,
-        w.created_at,
-        w.updated_at
-        ${includeKey ? ', ek.encrypted_private_key' : ''}
-      FROM wallet_addresses w
-      LEFT JOIN encrypted_keys ek ON w.id = ek.wallet_id
-      WHERE w.user_id = :userId
-      `,
+            SELECT 
+                w.id AS wallet_id, 
+                w.wallet_address, 
+                w.is_evm_compatible, 
+                w.backup, 
+                w.created_at, 
+                w.updated_at
+                ${includeKey ? ', ek.encrypted_private_key' : ''}
+            FROM wallet_addresses w
+            LEFT JOIN encrypted_keys ek ON w.id = ek.wallet_id
+            WHERE w.user_id = :userId
+            `,
             {
                 type: sequelize.QueryTypes.SELECT,
                 replacements: { userId },
@@ -109,7 +182,6 @@ exports.getWalletsByUser = async (req, res) => {
     }
 };
 
-// Update Wallet Status
 exports.updateWalletStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -121,10 +193,10 @@ exports.updateWalletStatus = async (req, res) => {
 
         const result = await sequelize.query(
             `
-      UPDATE wallet_addresses
-      SET enabled = :enabled, blocked = :blocked, updated_at = NOW()
-      WHERE id = :id
-      `,
+            UPDATE wallet_addresses
+            SET enabled = :enabled, blocked = :blocked, updated_at = NOW()
+            WHERE id = :id
+            `,
             { replacements: { id, enabled, blocked } }
         );
 
@@ -142,7 +214,6 @@ exports.updateWalletStatus = async (req, res) => {
     }
 };
 
-// Delete Wallet
 exports.deleteWallet = async (req, res) => {
     try {
         const { id } = req.params;
@@ -151,9 +222,9 @@ exports.deleteWallet = async (req, res) => {
         // Delete the wallet
         await sequelize.query(
             `
-      DELETE FROM wallet_addresses
-      WHERE id = :id
-      `,
+            DELETE FROM wallet_addresses
+            WHERE id = :id
+            `,
             { replacements: { id } }
         );
 
@@ -163,6 +234,49 @@ exports.deleteWallet = async (req, res) => {
         res.status(200).json({ message: 'Wallet deleted successfully' });
     } catch (error) {
         console.error('Error deleting wallet:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+exports.backupWallet = async (req, res) => {
+    try {
+        const { userId, walletId, encryptedPrivateKey, backupData } = req.body;
+
+        if (!userId || !walletId || !encryptedPrivateKey || !backupData) {
+            return res.status(400).json({ message: 'Required fields are missing' });
+        }
+
+        // Encrypt backup data (if needed)
+        const encryptedBackupData = rsaEncrypt(backupData, rsaPublicKey);
+
+        // Store the encrypted private key and backup in the database
+        await sequelize.query(
+            `
+            UPDATE encrypted_keys 
+            SET encrypted_private_key = :encryptedPrivateKey, updated_at = NOW() 
+            WHERE user_id = :userId AND wallet_id = :walletId
+            `,
+            {
+                replacements: { userId, walletId, encryptedPrivateKey },
+            }
+        );
+
+        await sequelize.query(
+            `
+            UPDATE wallet_addresses 
+            SET backup = :encryptedBackupData, updated_at = NOW() 
+            WHERE id = :walletId
+            `,
+            {
+                replacements: { encryptedBackupData, walletId },
+            }
+        );
+
+        // Log the backup action
+        await insertAuditLog(userId, walletId, 'Wallet Backup Created');
+
+        res.status(200).json({ message: 'Wallet backup successfully stored' });
+    } catch (error) {
+        console.error('Error backing up wallet:', error);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };

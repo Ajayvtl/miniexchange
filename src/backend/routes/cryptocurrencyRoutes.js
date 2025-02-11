@@ -1,5 +1,5 @@
 const express = require('express');
-const { addCryptocurrency, getCryptocurrencies, deleteCryptocurrency, updateCryptocurrency } = require('../controllers/cryptoController');
+const { addCryptocurrency, getCryptocurrencies, deleteCryptocurrency, updateCryptocurrency, getLiveCryptoRates } = require('../controllers/cryptoController');
 const { verifyToken, checkPermission } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -15,5 +15,6 @@ router.delete('/:id', verifyToken, checkPermission('manage_cryptocurrencies'), d
 
 // Enable/Disable Cryptocurrency
 router.put('/:id', verifyToken, checkPermission('manage_cryptocurrencies'), updateCryptocurrency);
+router.get('/rates', getLiveCryptoRates);
 
 module.exports = router;

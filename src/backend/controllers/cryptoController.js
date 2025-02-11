@@ -1,6 +1,13 @@
 const { Cryptocurrency } = require('../models');
 const { insertAuditLog } = require('../utils/logger');
-
+const axios = require('axios');
+const NodeCache = require('node-cache');
+const fs = require('fs');
+const path = require('path');
+const cache = new NodeCache({ stdTTL: 60 }); // Cache TTL: 60 seconds
+const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3/simple/price';
+const RATE_FILE_PATH = path.join(__dirname, '../data/cryptoRates.json');
+let lastUpdatedTime = 0;
 // Add Cryptocurrency
 exports.addCryptocurrency = async (req, res) => {
     try {
@@ -131,4 +138,78 @@ exports.updateCryptocurrency = async (req, res) => {
     }
 };
 
+// Background job to update rates every 10 seconds
+// Function to fetch and update rates on-demand
+async function fetchAndUpdateRates() {
+    try {
+        console.log('Attempting to update rates at', new Date().toISOString());
 
+        // Fetch enabled cryptocurrencies
+        const cryptocurrencies = await Cryptocurrency.findAll({ where: { enabled: 1 } });
+        if (cryptocurrencies.length === 0) {
+            console.warn('No enabled cryptocurrencies found');
+            return;
+        }
+
+        // Prepare API request for supported cryptocurrencies
+        const coinIds = cryptocurrencies.map(crypto => crypto.name.toLowerCase()).join(',');
+
+        try {
+            const response = await axios.get(`${COINGECKO_API_URL}?ids=${coinIds}&vs_currencies=usd`);
+
+            // Format the response
+            const rates = cryptocurrencies.map(crypto => ({
+                symbol: crypto.symbol,
+                price_usd: response.data[crypto.name.toLowerCase()]?.usd || 'N/A'
+            }));
+
+            // Write the rates to a JSON file
+            fs.writeFileSync(RATE_FILE_PATH, JSON.stringify(rates, null, 2));
+            lastUpdatedTime = Date.now();
+
+            console.log('Rates updated successfully at', new Date().toISOString());
+        } catch (apiError) {
+            if (apiError.response && apiError.response.status === 429) {
+                const retryAfter = apiError.response.headers['retry-after'] || 10;
+                console.warn(`Rate limit exceeded. Retrying after ${retryAfter} seconds.`);
+                setTimeout(fetchAndUpdateRates, retryAfter * 1000);
+            } else {
+                throw apiError;
+            }
+        }
+    } catch (error) {
+        console.error('Critical error updating rates:', error);
+    }
+}
+
+// // Background job to check and update rates if needed every 10 seconds
+// setInterval(() => {
+//     if (Date.now() - lastUpdatedTime >= 10000) {
+//         fetchAndUpdateRates();
+//     }
+// }, 10000);
+
+
+// GET /cryptocurrency/rates
+exports.getLiveCryptoRates = async (req, res) => {
+    try {
+        // Check if rates were updated within the last 10 seconds
+        const currentTime = Date.now();
+        if (currentTime - lastUpdatedTime < 10000 && fs.existsSync(RATE_FILE_PATH)) {
+            const cachedRates = JSON.parse(fs.readFileSync(RATE_FILE_PATH, 'utf-8'));
+            console.log('Returning cached rates.');
+            return res.status(200).json({ success: true, rates: cachedRates });
+        }
+
+        // Trigger an update if rates are outdated
+        console.log('Rates outdated, fetching new rates.');
+        await fetchAndUpdateRates();
+
+        // Return the newly updated rates
+        const updatedRates = JSON.parse(fs.readFileSync(RATE_FILE_PATH, 'utf-8'));
+        return res.status(200).json({ success: true, rates: updatedRates });
+    } catch (error) {
+        console.error('Error fetching live rates:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch live rates' });
+    }
+};
