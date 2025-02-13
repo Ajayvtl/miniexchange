@@ -21,6 +21,9 @@ function derivePublicKeyFromPrivateKey(privateKey) {
     const hash = crypto.createHash('sha256').update(privateKey).digest('hex');
     return `04${hash.slice(0, 64)}`;  // Example derivation, replace with proper logic
 }
+function deriveUniqueIdentifier(mnemonic) {
+    return crypto.createHash('sha256').update(mnemonic).digest('hex'); // Generate a unique user identifier
+}
 // Restore Wallet using mnemonic or encrypted private key
 exports.restoreWallet = async (req, res) => {
     try {
@@ -237,46 +240,149 @@ exports.deleteWallet = async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };
+// exports.backupWallet = async (req, res) => {
+//     try {
+//         const { userId, walletId, encryptedPrivateKey, backupData } = req.body;
+
+//         if (!userId || !walletId || !encryptedPrivateKey || !backupData) {
+//             return res.status(400).json({ message: 'Required fields are missing' });
+//         }
+
+//         // Encrypt backup data (if needed)
+//         const encryptedBackupData = rsaEncrypt(backupData, rsaPublicKey);
+
+//         // Store the encrypted private key and backup in the database
+//         await sequelize.query(
+//             `
+//             UPDATE encrypted_keys 
+//             SET encrypted_private_key = :encryptedPrivateKey, updated_at = NOW() 
+//             WHERE user_id = :userId AND wallet_id = :walletId
+//             `,
+//             {
+//                 replacements: { userId, walletId, encryptedPrivateKey },
+//             }
+//         );
+
+//         await sequelize.query(
+//             `
+//             UPDATE wallet_addresses 
+//             SET backup = :encryptedBackupData, updated_at = NOW() 
+//             WHERE id = :walletId
+//             `,
+//             {
+//                 replacements: { encryptedBackupData, walletId },
+//             }
+//         );
+
+//         // Log the backup action
+//         await insertAuditLog(userId, walletId, 'Wallet Backup Created');
+
+//         res.status(200).json({ message: 'Wallet backup successfully stored' });
+//     } catch (error) {
+//         console.error('Error backing up wallet:', error);
+//         res.status(500).json({ message: 'Internal Server Error' });
+//     }
+// };
+// Backup Wallets and Store Encrypted Information
 exports.backupWallet = async (req, res) => {
     try {
-        const { userId, walletId, encryptedPrivateKey, backupData } = req.body;
+        const { mnemonic, wallets, backupData } = req.body;
 
-        if (!userId || !walletId || !encryptedPrivateKey || !backupData) {
-            return res.status(400).json({ message: 'Required fields are missing' });
+        if (!mnemonic || !wallets) {
+            return res.status(400).json({ message: 'Mnemonic and wallet data are required' });
         }
 
-        // Encrypt backup data (if needed)
-        const encryptedBackupData = rsaEncrypt(backupData, rsaPublicKey);
+        let userIdentifier = deriveUniqueIdentifier(mnemonic);
+        let finalUserId;
 
-        // Store the encrypted private key and backup in the database
+        // Check if user exists
+        const [existingUser] = await sequelize.query(
+            `SELECT id FROM users WHERE username = :userIdentifier LIMIT 1`,
+            { type: sequelize.QueryTypes.SELECT, replacements: { userIdentifier } }
+        );
+
+        if (!existingUser) {
+            // Fetch default role_id (assuming role 'User' exists)
+            const [defaultRole] = await sequelize.query(
+                `SELECT id FROM roles WHERE name = 'User' LIMIT 1`,
+                { type: sequelize.QueryTypes.SELECT }
+            );
+            const roleId = defaultRole ? defaultRole.id : 1; // Fallback to role_id = 1 if 'User' role is missing
+
+            // Create a new user entry
+            const [newUser] = await sequelize.query(
+                `INSERT INTO users (username, role_id, createdAt, updatedAt) VALUES (:userIdentifier, :roleId, NOW(), NOW())`,
+                { replacements: { userIdentifier, roleId } }
+            );
+            finalUserId = newUser.insertId;
+        } else {
+            finalUserId = existingUser.id;
+        }
+
+        // Encrypt backup data (mnemonic & passkey)
+        const encryptedBackupData = rsaEncrypt(JSON.stringify(backupData), rsaPublicKey);
+
+        // Store encrypted mnemonic & passkey in encrypted_data table
         await sequelize.query(
-            `
-            UPDATE encrypted_keys 
-            SET encrypted_private_key = :encryptedPrivateKey, updated_at = NOW() 
-            WHERE user_id = :userId AND wallet_id = :walletId
-            `,
+            `INSERT INTO encrypted_data (user_id, encrypted_passkey, created_at, updated_at)
+             VALUES (:userId, :encryptedBackupData, NOW(), NOW())
+             ON DUPLICATE KEY UPDATE encrypted_passkey = :encryptedBackupData, updated_at = NOW()`,
             {
-                replacements: { userId, walletId, encryptedPrivateKey },
+                replacements: { userId: finalUserId, encryptedBackupData },
             }
         );
 
-        await sequelize.query(
-            `
-            UPDATE wallet_addresses 
-            SET backup = :encryptedBackupData, updated_at = NOW() 
-            WHERE id = :walletId
-            `,
-            {
-                replacements: { encryptedBackupData, walletId },
+        for (const wallet of wallets) {
+            if (!wallet.walletAddress || !wallet.encryptedPrivateKey) {
+                return res.status(400).json({ message: 'Each wallet must have a walletAddress and encryptedPrivateKey' });
             }
-        );
 
-        // Log the backup action
-        await insertAuditLog(userId, walletId, 'Wallet Backup Created');
+            // Insert or update wallet in wallet_addresses
+            const [existingWallet] = await sequelize.query(
+                `SELECT id FROM wallet_addresses WHERE wallet_address = :walletAddress AND user_id = :userId LIMIT 1`,
+                {
+                    type: sequelize.QueryTypes.SELECT,
+                    replacements: { walletAddress: wallet.walletAddress, userId: finalUserId },
+                }
+            );
 
-        res.status(200).json({ message: 'Wallet backup successfully stored' });
+            let walletId = existingWallet ? existingWallet.id : null;
+
+            if (!walletId) {
+                const [newWallet] = await sequelize.query(
+                    `INSERT INTO wallet_addresses (user_id, wallet_address, wallet_type, is_evm_compatible, backup, created_at, updated_at)
+                     VALUES (:userId, :walletAddress, :walletType, :isEvmCompatible, :encryptedBackupData, NOW(), NOW())`,
+                    {
+                        replacements: {
+                            userId: finalUserId,
+                            walletAddress: wallet.walletAddress,
+                            walletType: wallet.walletType || 'Unknown',
+                            isEvmCompatible: wallet.isEvmCompatible || false,
+                            encryptedBackupData,
+                        },
+                    }
+                );
+                walletId = newWallet.insertId;
+            }
+
+            // Insert or update encrypted private key
+            await sequelize.query(
+                `INSERT INTO encrypted_keys (user_id, wallet_id, encrypted_private_key, created_at, updated_at)
+                 VALUES (:userId, :walletId, :encryptedPrivateKey, NOW(), NOW())
+                 ON DUPLICATE KEY UPDATE encrypted_private_key = :encryptedPrivateKey, updated_at = NOW()`,
+                {
+                    replacements: { userId: finalUserId, walletId, encryptedPrivateKey: wallet.encryptedPrivateKey },
+                }
+            );
+
+            // Log the backup action
+            await insertAuditLog(finalUserId, walletId, 'Wallet Backup Created');
+        }
+
+        res.status(200).json({ message: 'Wallet backup successfully stored or updated' });
     } catch (error) {
         console.error('Error backing up wallet:', error);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };
+
