@@ -19,6 +19,35 @@ const isVpnDetected = async (ip) => {
         return false;  // Assume no VPN if API fails
     }
 };
+exports.appUserLogin = async (req, res) => {
+    try {
+        const { deviceId } = req.body; // Get device ID from request
+
+        if (!deviceId) {
+            return res.status(400).json({ error: "Device ID is required" });
+        }
+
+        // Check if user exists
+        let user = await User.findOne({ where: { username: deviceId } });
+
+        if (!user) {
+            // If user doesn't exist, create a new app user
+            user = await User.create({
+                username: deviceId,
+                email: null,
+                password: null,
+                role_id: (await Role.findOne({ where: { name: 'AppUser' } })).id
+            });
+        }
+
+        // Generate JWT Token
+        const token = jwt.sign({ userId: user.id, role: 'AppUser' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        return res.json({ token, user });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+};
 // Login Controller
 // Login Controller with VPN Detection
 exports.login = async (req, res) => {

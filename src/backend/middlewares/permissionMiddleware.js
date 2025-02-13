@@ -30,5 +30,24 @@ async function checkPermission(requiredPermission) {
         }
     };
 }
+exports.checkOwnData = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const { walletId, transactionId } = req.params;
 
+        if (walletId) {
+            const wallet = await Wallet.findOne({ where: { id: walletId, user_id: userId } });
+            if (!wallet) return res.status(403).json({ error: "Unauthorized access to wallet" });
+        }
+
+        if (transactionId) {
+            const transaction = await Transaction.findOne({ where: { id: transactionId, userId } });
+            if (!transaction) return res.status(403).json({ error: "Unauthorized access to transaction" });
+        }
+
+        next();
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+};
 module.exports = { checkPermission };
