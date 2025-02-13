@@ -1,11 +1,12 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { User, Role, Permission, RolePermission } = require('../models'); // Ensure models are correctly imported
+const { User, Role, Wallet, Permission, RolePermission } = require('../models'); // Ensure models are correctly imported
 const { insertAuditLog } = require('../utils/logger');
 const geoip = require('geoip-lite');  // Detect location from IP
 const axios = require('axios'); // Replace vpn-detection-service
 const IPINFO_API_TOKEN = process.env.IPINFO_API_TOKEN;
 const crypto = require('crypto');
+const bip39 = require('bip39');
 // Helper function to detect VPN using ipinfo.io
 const isVpnDetected = async (ip) => {
     try {
@@ -19,33 +20,41 @@ const isVpnDetected = async (ip) => {
         return false;  // Assume no VPN if API fails
     }
 };
-exports.appUserLogin = async (req, res) => {
+exports.appLogin = async (req, res) => {
     try {
-        const { deviceId } = req.body; // Get device ID from request
+        const { mnemonic } = req.body;
 
-        if (!deviceId) {
-            return res.status(400).json({ error: "Device ID is required" });
+        // 🔹 Validate the Mnemonic
+        if (!mnemonic || !bip39.validateMnemonic(mnemonic)) {
+            return res.status(400).json({ error: "Invalid mnemonic phrase" });
         }
 
-        // Check if user exists
-        let user = await User.findOne({ where: { username: deviceId } });
+        // 🔹 Derive Wallet Address from Mnemonic
+        const walletAddress = deriveWalletAddress(mnemonic);
 
-        if (!user) {
-            // If user doesn't exist, create a new app user
-            user = await User.create({
-                username: deviceId,
-                email: null,
-                password: null,
-                role_id: (await Role.findOne({ where: { name: 'AppUser' } })).id
-            });
-        }
+        // 🔹 Find Wallet and User
+        const wallet = await Wallet.findOne({ where: { wallet_address: walletAddress } });
 
-        // Generate JWT Token
-        const token = jwt.sign({ userId: user.id, role: 'AppUser' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        if (!wallet) return res.status(404).json({ error: "Wallet not found. Please register." });
 
-        return res.json({ token, user });
+        const user = await User.findByPk(wallet.user_id);
+
+        if (!user) return res.status(404).json({ error: "User not found." });
+
+        // 🔹 Generate JWT Tokens
+        const accessToken = generateJWT(user.id, wallet.id);
+        const refreshToken = generateRefreshToken(user.id);
+
+        res.json({
+            accessToken,
+            refreshToken,
+            user: {
+                id: user.id,
+                wallet_id: wallet.id
+            }
+        });
     } catch (error) {
-        return res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 // Login Controller
@@ -194,5 +203,87 @@ exports.validateToken = (req, res, next) => {
         next();
     } catch (error) {
         return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+};
+exports.appRegister = async (req, res) => {
+    try {
+        const { mnemonic } = req.body;
+
+        // 🔹 Validate the Mnemonic
+        if (!mnemonic || !bip39.validateMnemonic(mnemonic)) {
+            return res.status(400).json({ error: "Invalid mnemonic phrase" });
+        }
+
+        // 🔹 Generate Wallet Address from Mnemonic
+        const walletAddress = deriveWalletAddress(mnemonic);
+
+        // 🔹 Create User (Without Wallet)
+        const user = await User.create({
+            username: walletAddress,
+            email: null, // No email for app users
+            password: null,
+            role_id: 3 // Assuming 2 is 'AppUser'
+        });
+
+        // 🔹 Create and Link Wallet
+        const wallet = await Wallet.create({
+            user_id: user.id,
+            wallet_address: walletAddress,
+            encrypted_passkey: encryptMnemonic(mnemonic)
+        });
+
+        // 🔹 Generate JWT Token
+        const token = generateJWT(user.id, wallet.id);
+
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                wallet_id: wallet.id
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+
+// Helper function to derive wallet address from mnemonic
+function deriveWalletAddress(mnemonic) {
+    // Simulated logic for now, integrate actual key derivation
+    return `0x${bip39.mnemonicToSeedSync(mnemonic).toString('hex').slice(0, 40)}`;
+}
+
+// Encrypt mnemonic before storing
+function encryptMnemonic(mnemonic) {
+    // Implement AES/RSA encryption before storing in DB
+    return Buffer.from(mnemonic).toString('base64'); // Placeholder, replace with real encryption
+}
+
+// JWT Token Generation
+function generateJWT(userId, roleId) {
+    return jwt.sign({ userId, roleId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+}
+
+exports.refreshToken = async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(401).json({ error: "Refresh token required" });
+        }
+
+        jwt.verify(refreshToken, process.env.JWT_SECRET, async (err, decoded) => {
+            if (err) return res.status(403).json({ error: "Invalid refresh token" });
+
+            const user = await User.findByPk(decoded.userId);
+            if (!user) return res.status(404).json({ error: "User not found" });
+
+            const newAccessToken = generateJWT(user.id, user.role_id);
+
+            res.json({ accessToken: newAccessToken });
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };

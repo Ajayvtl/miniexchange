@@ -19,6 +19,7 @@ const kycRoutes = require('./routes/kycRoutes');
 const gatewayRoutes = require('./routes/gatewayRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
+const appUserRoutes = require("./routes/appUserRoutes");
 const app = express();
 
 // Middleware
@@ -38,6 +39,7 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/gateways', gatewayRoutes);
+app.use("/api/app", appUserRoutes);
 // Global Error Handler
 app.use((err, req, res, next) => {
     console.error('Global Error:', err.message);
