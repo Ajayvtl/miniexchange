@@ -1,17 +1,17 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
-
+const WalletType = require('./WalletType'); // ✅ Ensure WalletType is imported
 const WalletAddress = sequelize.define('WalletAddress', {
-    userId: {
+    user_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
     },
-    walletAddress: {
+    wallet_address: {
         type: DataTypes.STRING(255),
         allowNull: false,
         unique: true,
     },
-    walletTypeId: {
+    wallet_type_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
     },
@@ -27,7 +27,7 @@ const WalletAddress = sequelize.define('WalletAddress', {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
     },
-    encryptedPasskey: {
+    encrypted_passkey: {
         type: DataTypes.TEXT,
         allowNull: false,
     },
@@ -40,5 +40,5 @@ const WalletAddress = sequelize.define('WalletAddress', {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
 });
-WalletAddress.belongsTo(WalletType, { foreignKey: 'walletTypeId', as: 'walletType' });
+WalletAddress.belongsTo(WalletType, { foreignKey: 'wallet_type_id', as: 'walletType' });
 module.exports = WalletAddress;

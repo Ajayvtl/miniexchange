@@ -20,6 +20,7 @@ const gatewayRoutes = require('./routes/gatewayRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
 const appUserRoutes = require("./routes/appUserRoutes");
+
 const app = express();
 
 // Middleware
@@ -29,7 +30,6 @@ app.use(express.json());
 app.use('/api/users', userRoutes);
 app.use('/api', dashboardRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/wallet-types', walletTypeRoutes);
 app.use('/api/wallets', walletRoutes);
 app.use('/api/cryptocurrencies', cryptocurrencyRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -40,6 +40,7 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/gateways', gatewayRoutes);
 app.use("/api/app", appUserRoutes);
+app.use('/api/wallet-types', walletTypeRoutes);
 // Global Error Handler
 app.use((err, req, res, next) => {
     console.error('Global Error:', err.message);

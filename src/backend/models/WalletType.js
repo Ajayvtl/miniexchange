@@ -15,7 +15,7 @@ const WalletType = sequelize.define('WalletType', {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
     },
-    visibleToUser: {
+    visible_to_user: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
     },
@@ -23,6 +23,7 @@ const WalletType = sequelize.define('WalletType', {
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    tableName: 'wallet_types'
 });
 
 module.exports = WalletType;
