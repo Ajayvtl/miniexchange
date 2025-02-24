@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { getPermissionsForRole } = require('../controllers/permissionController'); // Ensure this import is correct
+const blacklistedTokens = require("../utils/tokenBlacklist"); // ✅ Import blacklist
 // Verify JWT Token Middleware
 // Verify JWT Token Middleware
+
 exports.verifyToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
 
@@ -10,7 +12,10 @@ exports.verifyToken = (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1]; // Extract token after "Bearer"
-
+    if (blacklistedTokens.has(token)) {
+        console.log("❌ Blacklisted token detected.");
+        return res.status(403).json({ error: "Invalid or expired token. Please Login Again." });
+    }
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded; // Attach decoded token to the request object
@@ -55,4 +60,32 @@ exports.checkPermission = (requiredPermission) => {
             res.status(500).json({ message: 'Internal Server Error' });
         }
     };
+};
+exports.authenticateAppUser = (req, res, next) => {
+    console.log("🔹 authenticateAppUser middleware triggered.");
+
+    const authHeader = req.headers["authorization"];
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        console.log("❌ No Authorization header.");
+        return res.status(401).json({ error: "Access Denied: No Token Provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // ✅ Check if the token is blacklisted
+    if (blacklistedTokens.has(token)) {
+        console.log("❌ Blacklisted token detected. Access denied.");
+        return res.status(403).json({ error: "Invalid or expired token. Please restore your wallet." });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET_APP, (err, user) => {
+        if (err) {
+            console.log("❌ Invalid App User token:", err.message);
+            return res.status(403).json({ error: "Invalid App User Token" });
+        }
+
+        console.log("✅ App User Verified:", user);
+        req.appUser = user;
+        next();
+    });
 };

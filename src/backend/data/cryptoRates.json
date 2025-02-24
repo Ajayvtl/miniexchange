@@ -1,19 +1,19 @@
 [
   {
     "symbol": "ETH",
-    "price_usd": 2685.9
+    "price_usd": 2833.35
   },
   {
-    "symbol": "LTC",
-    "price_usd": 127.85
-  },
-  {
-    "symbol": "UCN",
+    "symbol": "KROSS",
     "price_usd": "N/A"
   },
   {
+    "symbol": "SHREE",
+    "price_usd": 0.03981613
+  },
+  {
     "symbol": "BNB",
-    "price_usd": 638.77
+    "price_usd": "N/A"
   },
   {
     "symbol": "USDT",

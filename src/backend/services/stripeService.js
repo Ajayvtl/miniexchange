@@ -1,30 +1,19 @@
-const { GatewayConfig } = require('../models');
-const stripeService = require('./stripeService');
-const paypalService = require('./paypalService');
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-const gateways = {
-    stripe: stripeService,
-    paypal: paypalService,
-};
+exports.createPaymentIntent = async (amount, currency) => {
+    try {
+        console.log("🔹 Creating Stripe Payment Intent...");
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: amount * 100, // Convert to cents
+            currency,
+            payment_method_types: ["card"],
+        });
 
-exports.getGateway = async (gatewayName) => {
-    const gateway = await GatewayConfig.findOne({ where: { name: gatewayName } });
-    if (!gateway || !gateways[gatewayName]) {
-        return null;
+        console.log("✅ Payment Intent Created:", paymentIntent.id);
+        return { paymentId: paymentIntent.id, clientSecret: paymentIntent.client_secret };
+    } catch (error) {
+        console.error("❌ Stripe Payment Error:", error);
+        throw error;
     }
-    return { ...gateway, service: gateways[gatewayName] };
-};
-
-exports.logPayment = async (paymentDetails) => {
-    // Insert payment details into the database
-    const { userId, gatewayName, gatewayPaymentId, amount, currency, paymentType, status, description } = paymentDetails;
-    await sequelize.query(
-        `
-    INSERT INTO payments (user_id, gateway_name, gateway_payment_id, amount, currency, payment_type, status, description, created_at, updated_at)
-    VALUES (:userId, :gatewayName, :gatewayPaymentId, :amount, :currency, :paymentType, :status, :description, NOW(), NOW())
-    `,
-        {
-            replacements: { userId, gatewayName, gatewayPaymentId, amount, currency, paymentType, status, description },
-        }
-    );
 };

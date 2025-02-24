@@ -8,6 +8,7 @@ const cache = new NodeCache({ stdTTL: 60 }); // Cache TTL: 60 seconds
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3/simple/price';
 const RATE_FILE_PATH = path.join(__dirname, '../data/cryptoRates.json');
 let lastUpdatedTime = 0;
+const RATE_UPDATE_THRESHOLD = 10000;
 // Add Cryptocurrency
 exports.addCryptocurrency = async (req, res) => {
     try {
@@ -19,9 +20,13 @@ exports.addCryptocurrency = async (req, res) => {
             rate_limit_per_minute = 0,
             api_key,
             api_provider,
+            api_url,
             rpc_url,
             contract_address,
             symbol_link,
+            chain_id,
+            network_name,
+            explorer_url,
             enabled = 1
         } = req.body;
 
@@ -45,9 +50,13 @@ exports.addCryptocurrency = async (req, res) => {
             rate_limit_per_minute,
             api_key,
             api_provider,
+            api_url,
             rpc_url,
             contract_address,
             symbol_link,
+            chain_id,
+            network_name,
+            explorer_url,
             enabled
         });
 
@@ -207,9 +216,40 @@ exports.getLiveCryptoRates = async (req, res) => {
 
         // Return the newly updated rates
         const updatedRates = JSON.parse(fs.readFileSync(RATE_FILE_PATH, 'utf-8'));
+        console.log("✅ Updated Rates:", updatedRates);
         return res.status(200).json({ success: true, rates: updatedRates });
     } catch (error) {
         console.error('Error fetching live rates:', error);
         return res.status(500).json({ success: false, message: 'Failed to fetch live rates' });
+    }
+};
+exports.getLiveCryptoRatesInternal = async () => {
+    try {
+        console.log("🔹 Fetching Internal Crypto Rates...");
+
+        // ✅ Check if rates are outdated
+        const currentTime = Date.now();
+        if (fs.existsSync(RATE_FILE_PATH)) {
+            const cachedRates = JSON.parse(fs.readFileSync(RATE_FILE_PATH, "utf-8"));
+            const lastUpdatedTime = fs.statSync(RATE_FILE_PATH).mtimeMs;
+
+            if (currentTime - lastUpdatedTime < RATE_UPDATE_THRESHOLD) {
+                console.log("✅ Returning Cached Crypto Rates.");
+                return { success: true, rates: cachedRates };
+            }
+        }
+
+        // ✅ If outdated, update rates
+        console.log("🔹 Rates outdated, updating...");
+        await fetchAndUpdateRates();
+
+        // ✅ Read updated rates
+        const updatedRates = JSON.parse(fs.readFileSync(RATE_FILE_PATH, "utf-8"));
+        console.log("✅ Updated Internal Rates:", updatedRates);
+
+        return { success: true, rates: updatedRates };
+    } catch (error) {
+        console.error("❌ Error fetching Internal Crypto Rates:", error);
+        return { success: false, message: "Failed to fetch crypto rates." };
     }
 };

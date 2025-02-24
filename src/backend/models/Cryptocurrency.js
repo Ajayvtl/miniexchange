@@ -1,7 +1,7 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
 
-const Cryptocurrency = sequelize.define('Cryptocurrency', {
+const Cryptocurrency = sequelize.define("Cryptocurrency", {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -18,15 +18,27 @@ const Cryptocurrency = sequelize.define('Cryptocurrency', {
         unique: true,
     },
     type: {
-        type: DataTypes.ENUM('Coin', 'Token'),
+        type: DataTypes.ENUM("Coin", "Token"),
         allowNull: false,
-        defaultValue: 'Coin',
+        defaultValue: "Coin",
     },
     rpc_url: {
         type: DataTypes.STRING(255),
         allowNull: true,
     },
     contract_address: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+    },
+    chain_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+    },
+    network_name: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+    },
+    explorer_url: {
         type: DataTypes.STRING(255),
         allowNull: true,
     },
@@ -54,6 +66,18 @@ const Cryptocurrency = sequelize.define('Cryptocurrency', {
         type: DataTypes.TINYINT,
         defaultValue: 1,
     },
+    status: {
+        type: DataTypes.ENUM("active", "inactive"),
+        defaultValue: "active",
+    },
+    decimals: {  // ✅ New column
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 18,
+    }
+}, {
+    timestamps: true,
+    tableName: "cryptocurrencies",
 });
 
 module.exports = Cryptocurrency;

@@ -5,10 +5,11 @@ const Permission = require('./Permission');
 const RolePermission = require('./RolePermission');
 const Cryptocurrency = require('./Cryptocurrency');
 const Transaction = require('./Transaction');
-const GatewayConfig = require('../config/GatewayConfig');
+// const GatewayConfigs = require('./gatewayConfig');
 const AppUser = require('./AppUser'); // ✅ Ensure AppUser is imported
 const WalletAddress = require('./WalletAddress');
 const WalletType = require('./WalletType');
+const GatewayConfig = require('./GatewayConfig');
 // ✅ Define relationships
 Role.hasMany(User, { foreignKey: 'role_id', onDelete: 'CASCADE' });
 User.belongsTo(Role, { foreignKey: 'role_id' });
@@ -44,8 +45,9 @@ module.exports = {
     RolePermission,
     Cryptocurrency,
     Transaction,
-    GatewayConfig,
+    // GatewayConfigs,
     AppUser, // ✅ Ensure AppUser is included in exports
     WalletAddress,
-    WalletType
+    WalletType,
+    GatewayConfig,
 };
